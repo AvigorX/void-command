@@ -1,206 +1,205 @@
 # VOID COMMAND
 
-Gioco tattico a turni su griglia: comandi una flotta di astronavi, sfrutti terreno, copertura e
-linee di tiro, e vinci annientando il nemico o completando l'obiettivo di relè.
-Scritto in **GDScript** per **Godot 4.7.2**, resa **interamente procedurale**: scafi, stelle,
-nebulose, pianeti, raggi, esplosioni, scudi, pannelli e testo sono disegnati a runtime.
-Nessuna texture, sprite, font o suono importato. Nessuna rete, nessuna telemetria.
+Grid-based turn-based tactics game: you command a fleet of starships, exploit terrain, cover and
+lines of fire, and win by annihilating the enemy or completing the relay objective.
+Written in **GDScript** for **Godot 4.7.2**, with **entirely procedural** rendering: hulls, stars,
+nebulae, planets, beams, explosions, shields, panels and text are drawn at runtime.
+No imported texture, sprite, font or sound. No networking, no telemetry.
 
-Questo repository è il **pacchetto di archivio** del progetto (archiviato il 20 ottobre 2026 dopo
-la milestone M7B). Contiene codice, test, storia Git completa, la specifica tecnica e i documenti
-di continuità. La specifica tecnica integrale (in inglese) è in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); il report dell'ultima milestone è in
-[`docs/M7B-REPORT.md`](docs/M7B-REPORT.md); lo stato operativo in [`CHECKPOINT.md`](CHECKPOINT.md).
+This repository is the project's **archive package** (archived on 20 October 2026 after
+milestone M7B). It contains code, tests, the complete Git history, the technical specification and
+the continuity documents. The full technical specification (in English) is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); the report of the last milestone is in
+[`docs/M7B-REPORT.md`](docs/M7B-REPORT.md); the operational state in [`CHECKPOINT.md`](CHECKPOINT.md).
 
-> **Stato in una riga**: il gioco si avvia, tutte le 24 suite headless passano (**4.818 controlli**,
-> misurati il 20/10/2026),
-> la battaglia è giocabile dall'inizio alla fine — ma **la versione attuale presenta problemi di
-> giocabilità segnalati dall'utente**, documentati in §9.1. Il progetto non è più in sviluppo
-> attivo: questa è una chiusura ordinata, non una release.
-
----
-
-## 1. Visione e obiettivi
-
-Un wargame tattico "piccolo ma onesto": griglia ortogonale, movimento a celle, turni alternati,
-classi di nave con statistiche in dati, copertura e linea di vista, IA deterministica su seed.
-Il progetto nasce da un mandato progressivo (milestone STEP 1–3, M0–M7B) con principi non
-negoziabili, riassunti qui perché spiegano quasi tutte le scelte:
-
-1. **Solo 2D.** Niente 2.5D, niente modelli 3D.
-2. **Minimalismo visivo**, silhouette geometriche riconoscibili, UI leggibile.
-3. **Grafica procedurale**: nessun asset esterno necessario.
-4. **Sviluppo incrementale**: ogni milestone preserva ciò che funziona e supera una suite.
-5. **Determinismo**: stesso seed e stesse condizioni → stesso esito.
-6. **Separazione dei sistemi**: regole, presentazione e dati non si mescolano.
-7. **Niente riscritture inutili**; **checkpoint Git** a ogni milestone.
-
-Obiettivi **non** raggiunti (pianificati nel piano originale, mai implementati): campagna,
-crediti e acquisto di punti flotta, progressione persistente fra battaglie, refit di Carrier e
-Dreadnought.
+> **State in one line**: the game launches, all 24 headless suites pass (**4,818 checks**,
+> measured on 20/10/2026),
+> battle is playable from start to finish — but **the current version has playability problems
+> reported by the user**, documented in §9.1. The project is no longer in active
+> development: this is an orderly closure, not a release.
 
 ---
 
-## 2. Gameplay e funzionalità effettivamente presenti
+## 1. Vision and goals
 
-- **4 campi di battaglia** selezionabili: `20×14` (riferimento storico, generatore bloccato con
-  impronte di test), `32×22`, `72×72`, `80×80` (`TITAN`, `MAX_SIZE`).
-- **8 classi di nave** con statistiche in `scripts/core/ship_defs.gd`; scafi **length-only**
-  (1×1 · 1×3 · 1×4 · 1×5) con orientazione; tetti per classe (Dreadnought 1, Battleship 2,
-  Carrier 1), nessun tetto globale.
-- **Punti flotta** (FP) con budget 60 / 100 / 150 / 200 e limiti di composizione; schermata di
-  composizione flotta con `+`/`−`, rifiuto motivato delle scelte illegali, conferma esplicita.
-- **Battaglia a turni**: movimento con punti movimento, attacco, 4 abilità, attesa, fine turno;
-  distruzione simultanea gestita; vittoria per annientamento, per obiettivo di relè, o per limite
-  di round (`MAX_ROUNDS = 40`); sconfitta simmetrica; overlay di risultato e rivincita.
-- **Terreno e tattica**: nebulosa come copertura (non muro), ostacoli solidi, linea di vista,
-  copertura, armi ad area, footprint multi-cella con rotazione.
-- **Pathfinding** BFS/A* deterministico sulla griglia, con stati `(cella, orientazione)` per gli
-  scafi lunghi; rifiuto motivato quando non esiste rotta.
-- **IA deterministica** (valutatore greedy con jitter su seed, campo di distanza BFS, uso delle
-  abilità a regola) — un turno di profondità, nessun lookahead multi-turno.
-- **Salvataggio v1** in `user://void_command_save.json` (profilo, crediti, sblocchi) e snapshot di
-  battaglia `void_command_battle.json` per riprendere una partita.
-- **UI completa in codice**: menu principale, composizione flotta, HUD di battaglia con roster
-  scorrevole, pannello dettagli, log eventi, pausa, overlay di risultato.
-- **Camera**: zoom alla rotella sul puntatore, `Home` per inquadrare il campo, `R` per ricentrare.
+A "small but honest" tactical wargame: orthogonal grid, cell-based movement, alternating turns,
+ship classes with stats held in data, cover and line of sight, seed-deterministic AI.
+The project grew out of a progressive mandate (milestones STEP 1–3, M0–M7B) with non-negotiable
+principles, summarised here because they explain almost every choice:
 
-**Assenti**: audio (0 %), campagna/crediti, refit di Carrier e Dreadnought, fog of war,
-localizzazione, export e CI.
+1. **2D only.** No 2.5D, no 3D models.
+2. **Visual minimalism**, recognisable geometric silhouettes, readable UI.
+3. **Procedural graphics**: no external assets needed.
+4. **Incremental development**: every milestone preserves what works and passes a suite.
+5. **Determinism**: same seed and same conditions → same outcome.
+6. **Separation of systems**: rules, presentation and data do not mix.
+7. **No pointless rewrites**; **Git checkpoints** at every milestone.
+
+Goals **not** achieved (planned in the original plan, never implemented): campaign, credits and
+fleet point purchases, persistent progression between battles, Carrier and Dreadnought refits.
 
 ---
 
-## 3. Architettura e tecnologie
+## 2. Gameplay and features actually present
 
-Tre strati con un confine verificabile:
+- **4 selectable battlefields**: `20×14` (historical reference, generator locked with
+  test fingerprints), `32×22`, `72×72`, `80×80` (`TITAN`, `MAX_SIZE`).
+- **8 ship classes** with stats in `scripts/core/ship_defs.gd`; **length-only** hulls
+  (1×1 · 1×3 · 1×4 · 1×5) with orientation; per-class caps (Dreadnought 1, Battleship 2,
+  Carrier 1), no global cap.
+- **Fleet points** (FP) with budgets 60 / 100 / 150 / 200 and composition limits; fleet
+  composition screen with `+`/`−`, illegal choices rejected with a reason, explicit confirmation.
+- **Turn-based battle**: movement with movement points, attack, 4 abilities, wait, end turn;
+  simultaneous destruction handled; victory by annihilation, by relay objective, or by round
+  limit (`MAX_ROUNDS = 40`); symmetric defeat; result overlay and rematch.
+- **Terrain and tactics**: nebula as cover (not a wall), solid obstacles, line of sight,
+  cover, area weapons, multi-cell footprint with rotation.
+- **Pathfinding** deterministic BFS/A* on the grid, with `(cell, orientation)` states for long
+  hulls; rejection with a reason when no route exists.
+- **Deterministic AI** (greedy evaluator with seed jitter, BFS distance field, rule-based use of
+  abilities) — one turn of depth, no multi-turn lookahead.
+- **v1 save** in `user://void_command_save.json` (profile, credits, unlocks) and battle snapshot
+  `void_command_battle.json` to resume a match.
+- **Complete UI in code**: main menu, fleet composition, battle HUD with scrollable roster,
+  detail panel, event log, pause, result overlay.
+- **Camera**: mouse-wheel zoom at the pointer, `Home` to frame the field, `R` to re-centre.
 
-| Strato | Directory | Contenuto |
+**Missing**: audio (0 %), campaign/credits, Carrier and Dreadnought refits, fog of war,
+localisation, export and CI.
+
+---
+
+## 3. Architecture and technologies
+
+Three layers with a verifiable boundary:
+
+| Layer | Directory | Contents |
 |---|---|---|
-| **Regole** (nessun nodo, deterministico) | `scripts/core/` | `ship_defs.gd` (catalogo), `ship.gd`, `battle_map.gd` (generazione, zone), `map_config.gd` (preset), `battle.gd` (stato e turni), `pathfinder.gd`, `ai.gd`, `combat.gd`, `footprint.gd`, `fleet_points.gd`, `save_data.gd`, `battle_save.gd` |
-| **Presentazione** | `scripts/ui/` | `battle_view.gd` (disegno del campo), `battle_screen.gd` (interazione e camera), `hud.gd`, `menu_screen.gd`, `fleet_screen.gd`, `overlay.gd`, `starfield.gd` |
-| **Composizione** | `scripts/main.gd` | radice `Main.tscn`, passaggio fra menu → flotta → battaglia |
+| **Rules** (no nodes, deterministic) | `scripts/core/` | `ship_defs.gd` (catalogue), `ship.gd`, `battle_map.gd` (generation, zones), `map_config.gd` (presets), `battle.gd` (state and turns), `pathfinder.gd`, `ai.gd`, `combat.gd`, `footprint.gd`, `fleet_points.gd`, `save_data.gd`, `battle_save.gd` |
+| **Presentation** | `scripts/ui/` | `battle_view.gd` (field drawing), `battle_screen.gd` (interaction and camera), `hud.gd`, `menu_screen.gd`, `fleet_screen.gd`, `overlay.gd`, `starfield.gd` |
+| **Composition** | `scripts/main.gd` | `Main.tscn` root, transition from menu → fleet → battle |
 
-- **Dati, non costanti sparse**: classi, costi, footprint e statistiche vivono in `ship_defs.gd`;
-  le dimensioni del campo in `map_config.gd`. La geometria di rendering è **derivata** dalla
-  griglia (`cell_px`), non duplicata.
-- **Determinismo**: ogni decisione casuale passa da `RandomNumberGenerator` con seed esplicito e
-  stream dedicati; i test usano seed fissi e stampano l'impronta del layout.
-- **Un solo predicato per lo stato terminale**: `_battle_over()` è la prima istruzione dei
-  validatori e degli esecutori, così nessuna azione può mutare una battaglia finita.
-- **Contratto di footprint**: l'ancora è la cella minima, l'orientazione scambia le estensioni,
-  l'occupazione non è in cache e la rotazione avviene prima della traslazione. Dettaglio e
-  trappole: `docs/ARCHITECTURE.md` §5.1–§5.2.
-- **Test come contratto**: 24 suite headless + 4 sonde con finestra, ognuna con exit code.
+- **Data, not scattered constants**: classes, costs, footprints and stats live in `ship_defs.gd`;
+  field sizes in `map_config.gd`. Rendering geometry is **derived** from the grid (`cell_px`), not
+  duplicated.
+- **Determinism**: every random decision goes through `RandomNumberGenerator` with an explicit
+  seed and dedicated streams; tests use fixed seeds and print the layout fingerprint.
+- **A single predicate for the terminal state**: `_battle_over()` is the first statement of
+  validators and executors, so no action can mutate a finished battle.
+- **Footprint contract**: the anchor is the minimum cell, orientation swaps the extents,
+  occupancy is not cached, and rotation happens before translation. Details and traps:
+  `docs/ARCHITECTURE.md` §5.1–§5.2.
+- **Tests as contract**: 24 headless suites + 4 windowed probes, each with an exit code.
 
 ---
 
-## 4. Versioni e dipendenze
+## 4. Versions and dependencies
 
 | | |
 |---|---|
-| Motore | **Godot 4.7.2.stable.official** (`ed1daf0bf`) |
-| `config/features` dichiarata | `PackedStringArray("4.7")` |
-| Addon / plugin | nessuno |
-| Linguaggio | GDScript tipizzato — 58 file `.gd`, 16.208 righe (codice + test + sonde) |
-| Asset esterni | **nessuno** (nessuna texture, font, audio, modello) |
-| Rete | nessuna |
-| Risoluzione di riferimento | 1280×720, stretch `canvas_items` |
-| Storia Git | 53 commit su `master`, nessun remote configurato, nessun tag |
+| Engine | **Godot 4.7.2.stable.official** (`ed1daf0bf`) |
+| Declared `config/features` | `PackedStringArray("4.7")` |
+| Addon / plugin | none |
+| Language | Typed GDScript — 58 `.gd` files, 16,208 lines (code + tests + probes) |
+| External assets | **none** (no texture, font, audio, model) |
+| Networking | none |
+| Reference resolution | 1280×720, `canvas_items` stretch |
+| Git history | 53 commits on `master`, no remote configured, no tags |
 
 ---
 
-## 5. Struttura delle directory
+## 5. Directory structure
 
 ```
 VOID-COMMAND/
-├── project.godot              scena principale, InputMap, 1280×720
-├── scenes/Main.tscn           unica scena: radice + scripts/main.gd
+├── project.godot              main scene, InputMap, 1280×720
+├── scenes/Main.tscn           single scene: root + scripts/main.gd
 ├── scripts/
-│   ├── core/                  REGOLE: battaglia, mappa, navi, pathfinding, IA, punti flotta, salvataggi
-│   ├── ui/                    PRESENTAZIONE: viste, schermate, HUD, overlay, starfield
-│   └── main.gd                composizione
-├── tests/                     24 suite headless + sonde (benchmark, visive, equivalenza)
+│   ├── core/                  RULES: battle, map, ships, pathfinding, AI, fleet points, saves
+│   ├── ui/                    PRESENTATION: views, screens, HUD, overlay, starfield
+│   └── main.gd                composition
+├── tests/                     24 headless suites + probes (benchmark, visual, equivalence)
 ├── docs/
-│   ├── ARCHITECTURE.md        specifica tecnica originale (inglese): regole, geometria, milestone
-│   └── M7B-REPORT.md          report dell'ultima milestone (A/B, equivalenze, difetti trovati)
-├── verify.sh                  gate: check-only + import + avvio + 24 suite (exit code)
-├── README.md                  questo file
-├── CHECKPOINT.md              continuità operativa (stato, trappole, debiti, ripresa)
-├── INDEX.md                   indice: dove sta cosa
-└── project-plan.txt           piano progettuale originale dell'autore (roadmap a milestone)
+│   ├── ARCHITECTURE.md        original technical specification (English): rules, geometry, milestones
+│   └── M7B-REPORT.md          report of the last milestone (A/B, equivalences, defects found)
+├── verify.sh                  gate: check-only + import + launch + 24 suites (exit code)
+├── README.md                  this file
+├── CHECKPOINT.md              operational continuity (state, traps, debts, resuming)
+├── INDEX.md                   index: where things are
+└── project-plan.txt           the author's original project plan (milestone roadmap)
 ```
 
-`project-plan.txt` era escluso da Git nella directory di sviluppo (era il documento di lavoro
-dell'utente). È stato **incluso e versionato** in questo pacchetto perché contiene la roadmap e le
-decisioni di progetto, e un repository pubblico senza di esso sarebbe incompleto.
+`project-plan.txt` was excluded from Git in the development directory (it was the user's working
+document). It has been **included and versioned** in this package because it contains the roadmap
+and the project decisions, and a public repository without it would be incomplete.
 
 ---
 
-## 6. Installazione e avvio
+## 6. Installation and launch
 
-Prerequisito: Godot **4.7.2** (stessa minor). Nessun altro requisito, nessuna dipendenza.
+Prerequisite: Godot **4.7.2** (same minor). No other requirement, no dependency.
 
 ```bash
-# 1. eseguibile (adatta il percorso)
-export GODOT=/percorso/Godot_v4.7.2-stable_win64_console.exe   # Windows: variante _console
-export GODOT_GUI=/percorso/Godot_v4.7.2-stable_win64.exe       # finestra reale
+# 1. executable (adapt the path)
+export GODOT=/path/to/Godot_v4.7.2-stable_win64_console.exe   # Windows: _console variant
+export GODOT_GUI=/path/to/Godot_v4.7.2-stable_win64.exe       # real window
 
-# 2. primo import (crea .godot/, indispensabile per --check-only e per le suite)
+# 2. first import (creates .godot/, indispensable for --check-only and the suites)
 "$GODOT" --headless --path . --import
 
-# 3. gioca
+# 3. play
 "$GODOT_GUI" --path .
 ```
 
-Il progetto si apre anche dall'editor Godot (`Import` → `project.godot`).
-Su Windows Godot vuole path nativi (`C:/...`): in una shell MSYS usa `cygpath -m "$PWD"`.
+The project also opens from the Godot editor (`Import` → `project.godot`).
+On Windows Godot wants native paths (`C:/...`): in an MSYS shell use `cygpath -m "$PWD"`.
 
-### Comandi (InputMap del progetto)
+### Controls (project InputMap)
 
-| Tasto | Azione |
+| Key | Action |
 |---|---|
-| mouse sinistro | seleziona scafo / cella di destinazione / bersaglio |
-| rotella | zoom sul puntatore (sul roster: scorre l'elenco) |
-| `T` | ruota lo scafo selezionato (`rotate_cw`), con esito o motivo del rifiuto |
-| `R` | ricentra la camera |
-| `Home` | inquadra l'intero campo |
-| `SPACE` | fine turno (`end_turn`) |
-| `TAB` | scafo successivo (`next_ship`) |
-| `Q` | abilità (`ability`) |
-| `W` | attesa (`wait_ship`) |
-| `M` | cambia dimensione del campo (`toggle_map`) |
-| `F` | composizione flotta (`compose_fleet`) |
-| `C` | riprendi battaglia salvata (`resume_battle`) |
-| frecce | pan della camera |
-| `ESC` | pausa (`pause_menu`) |
+| left mouse | select hull / destination cell / target |
+| wheel | zoom at the pointer (on the roster: scrolls the list) |
+| `T` | rotate the selected hull (`rotate_cw`), with outcome or reason for rejection |
+| `R` | re-centre the camera |
+| `Home` | frame the entire field |
+| `SPACE` | end turn (`end_turn`) |
+| `TAB` | next hull (`next_ship`) |
+| `Q` | ability (`ability`) |
+| `W` | wait (`wait_ship`) |
+| `M` | change field size (`toggle_map`) |
+| `F` | fleet composition (`compose_fleet`) |
+| `C` | resume saved battle (`resume_battle`) |
+| arrow keys | camera pan |
+| `ESC` | pause (`pause_menu`) |
 
 ---
 
-## 7. Test ed esecuzione delle verifiche
+## 7. Tests and running the checks
 
 ```bash
-# tutto in un comando: versione, check-only su ogni .gd, import, avvio, 24 suite → exit 0
-GODOT=/percorso/..._console.exe bash verify.sh
+# everything in one command: version, check-only on every .gd, import, launch, 24 suites → exit 0
+GODOT=/path/to/..._console.exe bash verify.sh
 
-# solo i controlli statici (senza suite)
+# static checks only (no suites)
 GODOT=... bash verify.sh --quick
 
-# suite scelte
+# selected suites
 GODOT=... bash verify.sh --suites test_core test_hud
 
-# una singola suite a mano
+# a single suite by hand
 "$GODOT" --headless --path . --script res://tests/test_core.gd ; echo "exit=$?"
 ```
 
-Le suite sono script `extends SceneTree` che stampano un riepilogo (`checks: N   failures: 0`) ed
-escono con **0 = verde, 1 = almeno un controllo fallito**. Attenzione a due trappole già pagate:
-un `SCRIPT ERROR` può abortire una funzione lasciando la suite "verde" (grep l'output, non solo
-l'ultima riga), e l'exit code dopo una pipe è quello del comando a valle, non del motore.
+The suites are `extends SceneTree` scripts that print a summary (`checks: N   failures: 0`) and
+exit with **0 = green, 1 = at least one failed check**. Beware of two traps already paid for:
+a `SCRIPT ERROR` can abort a function leaving the suite "green" (grep the output, not just
+the last line), and the exit code after a pipe is that of the downstream command, not of the engine.
 
-Conteggi misurati il 20 ottobre 2026 nell'ambiente di archiviazione (Godot 4.7.2, Windows,
-headless) — 24 suite, **4.818 controlli, 0 fallimenti, 0 `SCRIPT ERROR`**:
+Counts measured on 20 October 2026 in the archiving environment (Godot 4.7.2, Windows,
+headless) — 24 suites, **4,818 checks, 0 failures, 0 `SCRIPT ERROR`**:
 
-| Suite | Controlli | Suite | Controlli |
+| Suite | Checks | Suite | Checks |
 |---|---:|---|---:|
 | `test_core` | 139 | `test_catalog` | 217 |
 | `test_ui` | 47 | `test_fleet` | 1307 |
@@ -215,154 +214,153 @@ headless) — 24 suite, **4.818 controlli, 0 fallimenti, 0 `SCRIPT ERROR`**:
 | `test_hud` | 37 | `test_bigmap` | 132 |
 | `test_battle_save` | 54 | `test_controls` | 35 |
 
-**Sonde** (non contano come suite, richiedono una finestra o stampano solo numeri):
+**Probes** (they do not count as suites, they require a window or only print numbers):
 
-| Sonda | Cosa fa | Dove scrive |
+| Probe | What it does | Where it writes |
 |---|---|---|
-| `tests/bigmap_probe.gd` | benchmark di `Battle.setup()` e turno nemico | stdout |
-| `tests/ai_decisions_probe.gd` | tabella di equivalenza delle decisioni IA | stdout |
-| `tests/fleet_balance_probe.gd` | matrice di bilanciamento AI-vs-AI (lenta, non completata nella sessione) | stdout |
-| `tests/visual_probe.gd`, `tests/m7b_visual_probe.gd`, `tests/step1_visual_probe.gd`, `tests/step2_fighter_probe.gd`, `tests/step3_fleet_probe.gd` | evidenza visiva, richiede finestra | `../../G-DEV-REPORTS/<nome>/` **due livelli sopra la radice del progetto**, creata dalla sonda |
-| `tests/test_save_isolation.gd` | esegue tutte le suite come processi figli e prova che il salvataggio reale resta identico | nessun file |
+| `tests/bigmap_probe.gd` | benchmark of `Battle.setup()` and the enemy turn | stdout |
+| `tests/ai_decisions_probe.gd` | equivalence table of AI decisions | stdout |
+| `tests/fleet_balance_probe.gd` | AI-vs-AI balance matrix (slow, not completed in the session) | stdout |
+| `tests/visual_probe.gd`, `tests/m7b_visual_probe.gd`, `tests/step1_visual_probe.gd`, `tests/step2_fighter_probe.gd`, `tests/step3_fleet_probe.gd` | visual evidence, requires a window | `../../G-DEV-REPORTS/<name>/` **two levels above the project root**, created by the probe |
+| `tests/test_save_isolation.gd` | runs all suites as child processes and proves the real save remains identical | no file |
 
-> Le sonde visive scrivono **fuori dal progetto** (`ProjectSettings.globalize_path("res://") +
-> "../../G-DEV-REPORTS/<nome>/"`, con `DirAccess.make_dir_recursive_absolute`): è deliberato, così i
-> PNG non finiscono in `res://` né entrano nel repository. Con il pacchetto in
-> `G-DEV/archivio/VOID-COMMAND/` il percorso risolve in `G-DEV/G-DEV-REPORTS/<nome>/`. Se sposti il
-> pacchetto, puoi modificare quella riga nella sonda oppure accettare che l'output finisca due
-> livelli sopra la radice. Le sonde chiamano `SaveGuard.isolate()`: il salvataggio reale non viene
-> toccato (verificato in questa sede, hash identico prima e dopo).
+> The visual probes write **outside the project** (`ProjectSettings.globalize_path("res://") +
+> "../../G-DEV-REPORTS/<name>/"`, with `DirAccess.make_dir_recursive_absolute`): this is deliberate, so the
+> PNGs neither end up in `res://` nor enter the repository. With the package in
+> `G-DEV/archivio/VOID-COMMAND/` the path resolves to `G-DEV/G-DEV-REPORTS/<name>/`. If you move the
+> package, you can change that line in the probe or accept that the output ends up two
+> levels above the root. The probes call `SaveGuard.isolate()`: the real save is not
+> touched (verified in this location, identical hash before and after).
 
 ---
 
-## 8. Stato reale dello sviluppo
+## 8. Actual state of development
 
-Legenda: **VERIFICATO** (eseguito con exit code o stato osservato prima/dopo) · **ESEGUITO**
-(output visto, nessuna asserzione) · **PARZIALE** · **PIANIFICATO** · **NON FUNZIONANTE**.
-La colonna "prova" rimanda alla suite o alla misura.
+Legend: **VERIFIED** (run with an exit code or state observed before/after) · **EXECUTED**
+(output seen, no assertion) · **PARTIAL** · **PLANNED** · **NOT WORKING**.
+The "proof" column points to the suite or the measurement.
 
-| Area | Stato | Prova |
+| Area | State | Proof |
 |---|---|---|
-| Avvio, menu, navigazione fra schermate | **VERIFICATO** | `test_ui`, `test_acceptance`, avvio headless exit 0 |
-| Regole di battaglia, turni, vittoria/sconfitta, relè | **VERIFICATO** | `test_core` (139) |
-| Geometria footprint, rotazione, occupazione | **VERIFICATO** | `test_footprint` (177), `test_multicell` (206) |
-| Pathfinding e ricerca `(cella, orientazione)` | **VERIFICATO** | `test_pathfinding` (93), `test_pathsearch_equivalence` (1440) |
-| IA deterministica e sue decisioni | **VERIFICATO** | `test_stress`, `ai_decisions_probe` |
-| Campi 20×14 / 32×22 / 72×72 / 80×80 | **VERIFICATO** | `test_maps` (116), `test_bigmap` (132), `test_map_stress` (15) |
-| Composizione flotta, budget, limiti di classe | **VERIFICATO** | `test_fleet` (1307), `test_fleet_ui` (157) |
-| Salvataggio v1 e snapshot di battaglia | **VERIFICATO** | `test_battle_save` (54), `test_save_isolation` |
-| HUD, roster, camera, controlli | **VERIFICATO** | `test_hud` (37), `test_camera` (21), `test_controls` (35) |
-| Prestazioni su campo grande | **MISURATO** (non è un criterio di pass/fail) | `bigmap_probe`, §9.1 |
-| Evidenza visiva (screenshot) | **VERIFICATO** — sonda `m7b_visual_probe` rieseguita il 20/10 dal pacchetto: 24 controlli, `RESULT: PASS`, 6 frame non vuoti; PNG prodotti **fuori** dal pacchetto e non inclusi | `README.md` §7, `docs/M7B-REPORT.md` §4 |
-| Giocabilità complessiva (divertimento, ritmo) | **PROBLEMATICA** — vedi §9.1 | segnalazione utente + misure |
-| Audio | **PIANIFICATO** (0 %) | — |
-| Campagna, crediti, refit Carrier/Dreadnought | **PIANIFICATO** | `project-plan.txt` |
-| Export, CI, localizzazione | **PIANIFICATO** | — |
+| Launch, menu, navigation between screens | **VERIFIED** | `test_ui`, `test_acceptance`, headless launch exit 0 |
+| Battle rules, turns, victory/defeat, relay | **VERIFIED** | `test_core` (139) |
+| Footprint geometry, rotation, occupancy | **VERIFIED** | `test_footprint` (177), `test_multicell` (206) |
+| Pathfinding and `(cell, orientation)` search | **VERIFIED** | `test_pathfinding` (93), `test_pathsearch_equivalence` (1440) |
+| Deterministic AI and its decisions | **VERIFIED** | `test_stress`, `ai_decisions_probe` |
+| Fields 20×14 / 32×22 / 72×72 / 80×80 | **VERIFIED** | `test_maps` (116), `test_bigmap` (132), `test_map_stress` (15) |
+| Fleet composition, budget, class caps | **VERIFIED** | `test_fleet` (1307), `test_fleet_ui` (157) |
+| v1 save and battle snapshot | **VERIFIED** | `test_battle_save` (54), `test_save_isolation` |
+| HUD, roster, camera, controls | **VERIFIED** | `test_hud` (37), `test_camera` (21), `test_controls` (35) |
+| Performance on a large field | **MEASURED** (not a pass/fail criterion) | `bigmap_probe`, §9.1 |
+| Visual evidence (screenshots) | **VERIFIED** — `m7b_visual_probe` re-run on 20/10 from the package: 24 checks, `RESULT: PASS`, 6 non-empty frames; PNGs produced **outside** the package and not included | `README.md` §7, `docs/M7B-REPORT.md` §4 |
+| Overall playability (fun, pacing) | **PROBLEMATIC** — see §9.1 | user report + measurements |
+| Audio | **PLANNED** (0 %) | — |
+| Campaign, credits, Carrier/Dreadnought refits | **PLANNED** | `project-plan.txt` |
+| Export, CI, localisation | **PLANNED** | — |
 
 ---
 
-## 9. Problemi noti e funzionalità mancanti
+## 9. Known issues and missing features
 
-### 9.1 Problemi di giocabilità (segnalati dall'utente)
+### 9.1 Playability problems (reported by the user)
 
-**La versione attuale presenta problemi di giocabilità segnalati dall'utente.** Il testo esatto
-della segnalazione non è registrato nei file del progetto: qui sono riportati i **sintomi
-documentati e misurati** nel repository, senza inventare diagnosi.
+**The current version has playability problems reported by the user.** The exact text of the
+report is not recorded in the project files: what is reported here are the **symptoms documented
+and measured** in the repository, without inventing diagnoses.
 
-1. **Le partite sul campo grande finiscono per limite di round con superstiti.** Misurato su
-   80×80 con IA contro IA: 5 battaglie su 6 (budget 0 / 60 / 100 FP, 9–29 scafi) terminate a
-   `MAX_ROUNDS = 40` con 1–3 scafi vivi per parte, perché le flotte partono a ~68 celle di
-   distanza e l'IA chiude di un paio di celle per turno. Su 20×14 la stessa regola è generosa.
-   Il limite **non è stato cambiato**: è una condizione di vittoria e richiede un mandato
-   (la forma ovvia del fix è un limite derivato dall'area del campo).
-2. **Il campo 80×80 non è leggibile a colpo d'occhio**: celle da 8 px all'inquadratura completa
-   (29 px su 32×22). È pensato per essere giocato zoomato, ma a zoom 1 non si distingue nulla.
-3. **Il turno nemico congela la finestra**: ~21 s su 80×80 con 52 scafi (~0,4 s per scafo), perché
-   l'IA gira sincrona dentro `end_turn`. Le flotte di default (4–9 scafi) restano sotto 0,5 s.
-4. **Il roster mostra 7 righe fisse** (banda 122–274 px): con 52 scafi si scorre con la rotella;
-   nessun filtro, nessuna doppia colonna.
-5. **Avvio battaglia con hitch**: `Battle.setup()` 1,5 s su 72×72 e 1,8 s su 80×80, più 1,2–1,4 s
-   di generazione mappa (dominata da `nav_stats()`, 25.600 stati per layout candidato).
-6. **Nessun audio**: ogni azione è silenziosa.
+1. **Matches on the large field end at the round limit with survivors.** Measured on
+   80×80 with AI versus AI: 5 battles out of 6 (budget 0 / 60 / 100 FP, 9–29 hulls) ended at
+   `MAX_ROUNDS = 40` with 1–3 hulls alive per side, because the fleets start ~68 cells
+   apart and the AI closes by a couple of cells per turn. On 20×14 the same rule is generous.
+   The limit **has not been changed**: it is a victory condition and requires a mandate
+   (the obvious shape of the fix is a limit derived from the field area).
+2. **The 80×80 field is not readable at a glance**: 8 px cells at full framing
+   (29 px on 32×22). It is meant to be played zoomed in, but at zoom 1 nothing is distinguishable.
+3. **The enemy turn freezes the window**: ~21 s on 80×80 with 52 hulls (~0.4 s per hull), because
+   the AI runs synchronously inside `end_turn`. Default fleets (4–9 hulls) stay under 0.5 s.
+4. **The roster shows 7 fixed rows** (band 122–274 px): with 52 hulls you scroll with the wheel;
+   no filter, no two-column layout.
+5. **Battle start with a hitch**: `Battle.setup()` 1.5 s on 72×72 and 1.8 s on 80×80, plus 1.2–1.4 s
+   of map generation (dominated by `nav_stats()`, 25,600 states per candidate layout).
+6. **No audio**: every action is silent.
 
-Non sono state applicate correzioni: l'archiviazione non è una sessione di sviluppo (§12).
+No fixes have been applied: archiving is not a development session (§12).
 
-### 9.2 Funzionalità mancanti
+### 9.2 Missing features
 
-- **Audio**: assente al 100 % (servirebbe generare `AudioStreamWAV`, nessun asset importato).
-- **Campagna, crediti, acquisto di punti flotta**: pianificati, mai iniziati.
-- **Refit di Carrier e Dreadnought**: il salvataggio potenzia solo le quattro classi originali.
-- **Tassi di vittoria per budget**: non misurati (`fleet_balance_probe.gd` è lento e non è stato
-  completato).
-- **Fog of war**: assente per scelta (entrambe le flotte sempre visibili).
-- **Localizzazione**: UI solo in inglese.
-- **Export e CI**: nessun preset, nessuna pipeline.
+- **Audio**: 100 % absent (would require generating `AudioStreamWAV`, no imported assets).
+- **Campaign, credits, fleet point purchases**: planned, never started.
+- **Carrier and Dreadnought refits**: the save only upgrades the four original classes.
+- **Victory rates per budget**: not measured (`fleet_balance_probe.gd` is slow and was not
+  completed).
+- **Fog of war**: absent by choice (both fleets always visible).
+- **Localisation**: UI in English only.
+- **Export and CI**: no preset, no pipeline.
 
-### 9.3 Limiti noti di ciò che c'è
+### 9.3 Known limits of what exists
 
-- IA a **un turno di profondità**: minimizza traslazioni, non piani multi-turno.
-- Risoluzione di riferimento fissa 1280×720: nessun re-layout responsive; il pannello HUD non
-  scala con le celle.
-- Composizione della flotta nemica: lista fissa scalata per difficoltà, non generata per seed.
-- Overlay di risultato dopo l'ultima animazione (~1–2 s), senza "salta animazione".
-- Un test interrotto brutalmente può lasciare `user://void_command_save.test.json`: non è mai il
-  salvataggio reale e la run successiva lo rimuove.
-
----
-
-## 10. Debiti tecnici
-
-Ordinati per payoff (dettaglio e misure in `CHECKPOINT.md` §7):
-
-1. **`MAX_ROUNDS` non scala con il campo** — è il primo problema di giocabilità (§9.1.1).
-2. **Turno nemico sincrono** — ~0,4 s per scafo; serve un test di linea di vista più economico o
-   un turno incrementale.
-3. **Generazione mappa** — `nav_stats()` è il collo di bottiglia dell'avvio battaglia.
-4. **Roster a 7 righe** senza filtro né doppia colonna.
-5. **Leggibilità del campo grande** a zoom 1.
-6. **IA senza lookahead**.
-7. **Refit mancante** e bilanciamento non misurato.
-8. Contratto di geometria: la ridisegnatura delle silhouette (Cruiser 1×3 → 1×2) è **deferita**
-   per mandato esplicito, non dimenticata.
+- AI with **one turn of depth**: it minimises translations, not multi-turn plans.
+- Fixed reference resolution 1280×720: no responsive re-layout; the HUD panel does not
+  scale with the cells.
+- Enemy fleet composition: fixed list scaled by difficulty, not generated per seed.
+- Result overlay after the last animation (~1–2 s), with no "skip animation".
+- A brutally interrupted test can leave `user://void_command_save.test.json`: it is never the
+  real save and the next run removes it.
 
 ---
 
-## 11. Riprendere lo sviluppo
+## 10. Technical debt
 
-Ordine di lettura e protocollo completo: `CHECKPOINT.md` §0, §3 (confine di autorizzazione),
-§4 (riprodurre lo stato), §10 (protocollo di ripresa). In sintesi:
+Ordered by payoff (details and measurements in `CHECKPOINT.md` §7):
 
-1. `bash verify.sh` → deve uscire 0 con 24/24 suite verdi e i conteggi di §7.
-2. Confronta il conteggio: una differenza è un segnale, non rumore.
-3. **Chiedi all'utente quale milestone è autorizzata**: `CHECKPOINT.md` §8 è una raccomandazione,
-   non un'autorizzazione.
-4. Prima di modificare: albero pulito, un commit per unità coerente, test prima del commit.
-5. Vincoli attivi: solo 2D, grafica procedurale, determinismo su seed, salvataggio reale mai
-   toccato dai test, nessun comando Git distruttivo.
+1. **`MAX_ROUNDS` does not scale with the field** — it is the first playability problem (§9.1.1).
+2. **Synchronous enemy turn** — ~0.4 s per hull; a cheaper line-of-sight test is needed, or an
+   incremental turn.
+3. **Map generation** — `nav_stats()` is the bottleneck of battle start.
+4. **7-row roster** with no filter and no two-column layout.
+5. **Readability of the large field** at zoom 1.
+6. **AI without lookahead**.
+7. **Missing refit** and unmeasured balancing.
+8. Geometry contract: the silhouette redraw (Cruiser 1×3 → 1×2) is **deferred**
+   by explicit mandate, not forgotten.
 
 ---
 
-## 12. Perché il progetto è congelato
+## 11. Resuming development
 
-L'archiviazione (20/10/2026) **non è una milestone di sviluppo**: nessuna funzionalità è stata
-aggiunta e nessun problema di gameplay è stato corretto. Sono state fatte solo operazioni di
-packaging:
+Reading order and full protocol: `CHECKPOINT.md` §0, §3 (authorisation boundary),
+§4 (reproduce the state), §10 (resume protocol). In short:
 
-- copia del progetto, rimozione della cache `.godot/`, dei report di sessione e delle immagini di
-  prova (conservati nel backup, `CHECKPOINT.md` §11);
-- aggiunta di `verify.sh`, `.gitignore` e dei documenti `README.md`, `CHECKPOINT.md`, `INDEX.md`;
-- versionamento di `project-plan.txt`, che nella directory di sviluppo era escluso da Git;
-- storia Git preservata integralmente (53 commit, nessuna riscrittura, nessun nuovo remote).
+1. `bash verify.sh` → must exit 0 with 24/24 suites green and the counts of §7.
+2. Compare the count: a difference is a signal, not noise.
+3. **Ask the user which milestone is authorised**: `CHECKPOINT.md` §8 is a recommendation,
+   not an authorisation.
+4. Before modifying: clean tree, one commit per coherent unit, tests before the commit.
+5. Active constraints: 2D only, procedural graphics, determinism on seed, real save never
+   touched by tests, no destructive Git commands.
 
-Ciò che serve per riprendere è in `CHECKPOINT.md`; ciò che è stato misurato in questa sede è in
+---
+
+## 12. Why the project is frozen
+
+Archiving (20/10/2026) **is not a development milestone**: no feature was added and no gameplay
+problem was fixed. Only packaging operations were performed:
+
+- copy of the project, removal of the `.godot/` cache, the session reports and the test
+  images (kept in the backup, `CHECKPOINT.md` §11);
+- addition of `verify.sh`, `.gitignore` and the `README.md`, `CHECKPOINT.md`, `INDEX.md` documents;
+- versioning of `project-plan.txt`, which was excluded from Git in the development directory;
+- Git history preserved in full (53 commits, no rewriting, no new remote).
+
+What is needed to resume is in `CHECKPOINT.md`; what was measured in this location is in
 `CHECKPOINT.md` §2.
 
 ---
 
-## 13. Licenza e attribuzioni
+## 13. Licence and attributions
 
-- **Codice del gioco**: nessuna licenza dichiarata dall'autore (tutti i diritti riservati). Va
-  scelta una licenza **prima** di pubblicare il repository.
-- **Motore**: Godot Engine 4.7.2, licenza MIT (© Godot Engine contributors).
-- **Asset di terze parti**: nessuno. Ogni elemento visivo è disegnato dal codice del progetto.
-- **Font**: nessun font importato; il gioco usa il font di fallback del motore.
+- **Game code**: no licence declared by the author (all rights reserved). A licence must be
+  chosen **before** publishing the repository.
+- **Engine**: Godot Engine 4.7.2, MIT licence (© Godot Engine contributors).
+- **Third-party assets**: none. Every visual element is drawn by the project code.
+- **Font**: no imported font; the game uses the engine's fallback font.
