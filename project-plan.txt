@@ -1,0 +1,733 @@
+# VOID COMMAND — Piano progettuale completo
+**Documento di riferimento · Versione 1.0 · 19 ottobre 2026**
+
+## 1. Visione del progetto
+
+**VOID COMMAND** è un gioco tattico spaziale a turni, realizzato in Godot 4.7.2.
+
+Il giocatore comanda una flotta di astronavi, si muove su una griglia, sfrutta il terreno, gestisce distanze e linee di tiro e combatte per raggiungere obiettivi tattici. Nel tempo, il gioco evolverà da un sistema di battaglia funzionante a un'esperienza strategica con flotte personalizzabili, IA tattica, campagne e progressione persistente.
+
+### Principi non negoziabili
+
+1. **Solo 2D.** Niente 2.5D, modelli 3D o effetti che trasformino il progetto in un gioco tridimensionale.
+2. **Minimalismo visivo.** Interfaccia leggibile, silhouette geometriche riconoscibili e animazioni funzionali al gameplay.
+3. **Grafica procedurale.** Le astronavi, gli effetti, gli sfondi e gli elementi visivi sono disegnati tramite GDScript. Nessuna dipendenza necessaria da texture, modelli o font esterni.
+4. **Sviluppo incrementale.** Ogni milestone deve preservare ciò che funziona, aggiungere una capacità ben delimitata e superare una suite di test.
+5. **Determinismo.** A parità di seed e condizioni iniziali, la generazione procedurale deve rimanere riproducibile.
+6. **Separazione dei sistemi.** Combattimento, composizione delle flotte, crediti, potenziamenti e campagna devono avere responsabilità distinte.
+7. **Niente riscritture inutili.** Si estende l'architettura esistente solo dove serve.
+8. **Checkpoint Git.** Ogni milestone significativa deve avere un commit identificabile e un albero di lavoro pulito al termine.
+
+## 2. Stato tecnico di partenza
+
+### Stack e struttura
+
+- Engine: Godot 4.7.2.
+- Risoluzione di riferimento: 1280×720.
+- Gioco su griglia quadrata, attualmente 20×14.
+- Scena principale: `Main.tscn`.
+- Sistemi principali in `scripts/core/`: definizioni delle navi, navi, mappa, pathfinding, combattimento, battaglia, IA e salvataggi.
+- Interfaccia in `scripts/ui/`: vista battaglia, HUD, schermate, overlay e sfondo stellato.
+- Salvataggio persistente attuale: `user://void_command_save.json`.
+- Schema di salvataggio iniziale: versione 1.
+
+### Funzionalità già esistenti
+
+- Battaglie a turni.
+- Movimento e attacchi.
+- Abilità delle unità.
+- Punti vita, scudi e armatura.
+- Linea di vista e coperture.
+- Nebulose, asteroidi e altri elementi ambientali.
+- Obiettivo relay.
+- IA nemica.
+- Menu, HUD, schermate di battaglia e risultato.
+- Crediti, potenziamenti e statistiche persistenti.
+
+### Milestone tecniche completate secondo i report
+
+**S0 — Baseline e isolamento dei test**
+- Repository Git e baseline conservata.
+- Suite di test iniziale verificata.
+- Isolamento dei test dal salvataggio reale.
+- Blocco delle azioni di combattimento dopo la conclusione della battaglia.
+
+Checkpoint: `c9de49b`.
+
+**S0.1 — Stabilizzazione dei test**
+- Corretto un test di accettazione intermittente mediante seed fisso e precondizioni esplicite.
+- Verificata la ripetibilità dei test su più esecuzioni.
+
+Checkpoint: `1b488ca`.
+
+**S1 — Fondamenta delle navi multi-cella**
+- Introdotto `footprint.gd`.
+- Aggiunti footprint, orientamento e enumerazione delle celle occupate.
+- Conservate le dimensioni attuali delle navi operative.
+- Nessuna modifica alle dimensioni della mappa.
+
+Checkpoint: `41b8841`.
+
+**S2–S5 — Supporto multi-cella nel motore**
+- Occupazione delle celle derivata dalle navi vive.
+- Validazione del posizionamento e gestione delle collisioni.
+- Pathfinding consapevole del footprint.
+- Movimento e rotazione validati atomicamente.
+- Attacchi e linea di vista compatibili con più celle.
+- Relay, selezione e rendering adattati alle navi grandi.
+- Test di integrazione aggiunti.
+
+Checkpoint intermedio: `8de1fd5`.
+
+Checkpoint finale: `560c767`.
+
+I report indicano 623 asserzioni complessive superate, oltre ai controlli di isolamento del salvataggio e di determinismo. Questi risultati sono riportati dai test eseguiti dall'agente: prima di ogni rilascio importante bisogna rieseguire la suite sull'effettivo stato del repository.
+
+### Stato corrente da preservare
+
+- La griglia è ancora 20×14.
+- Le classi operative sono ancora nelle dimensioni precedenti, tutte 1×1.
+- Il motore supporta footprint più grandi, ma non tutte le classi sono state ancora attivate.
+- Crediti e potenziamenti non devono essere confusi con i punti flotta.
+- Il salvataggio esistente non deve essere modificato accidentalmente dai test.
+
+### Problemi tecnici noti da verificare
+
+Prima di considerare completa l'integrazione delle navi grandi, occorre verificare e, se necessario, correggere:
+
+- La copertura in combattimento, attualmente legata alla cella di riferimento del bersaglio.
+- Il calcolo delle armi ad area, ancora basato sulle celle di riferimento.
+- L'origine di alcuni effetti visivi, legata alla cella di riferimento.
+- L'interazione di targeting quando si clicca su una cella secondaria della nave.
+- Il deployment, che deve validare l'intero footprint.
+- La leggibilità di orientamento e dimensioni nell'HUD.
+
+Questi punti devono essere chiusi nelle milestone pertinenti, senza anticipare modifiche non necessarie.
+
+---
+
+## 3. Roadmap ufficiale
+
+L'ordine è intenzionale: prima solidità tecnica, poi spazio tattico, classi e composizione, IA, profondità, campagna e rifinitura.
+
+## STEP 0 — Congelare la baseline
+
+**Stato: completato secondo i checkpoint disponibili.**
+
+Obiettivi:
+- Verificare il progetto e la suite di test esistente.
+- Conservare una copia funzionante.
+- Eseguire i test e registrarne i risultati.
+- Acquisire screenshot di riferimento di menu, battaglia, pausa e risultato.
+- Documentare i problemi preesistenti.
+
+Criteri di accettazione:
+- Baseline Git identificabile.
+- Suite di riferimento riproducibile.
+- Problemi preesistenti documentati.
+- Salvataggio reale protetto dai test.
+
+## STEP 1 — Navi multi-cella
+
+**Stato: motore implementato; integrazione completa da verificare.**
+
+Obiettivi:
+- Supportare footprint di dimensioni diverse.
+- Gestire orientamento e occupazione delle celle.
+- Aggiornare movimento, pathfinding, collisioni, selezione, attacchi e distruzione.
+- Impedire che una nave occupi celle invalide o condivise con altre navi.
+- Mantenere la griglia 20×14 durante questa fase.
+
+Regole tecniche:
+- Tutte le celle occupate partecipano alla validazione.
+- Il movimento è atomico: un'azione rifiutata non deve lasciare uno stato parzialmente modificato.
+- La distruzione libera tutte le celle occupate.
+- La selezione e il targeting devono identificare correttamente la nave anche cliccando su una sua cella secondaria.
+- Il sistema deve restare compatibile con le unità 1×1.
+
+Criteri di accettazione:
+- Test automatici per posizionamento, rotazione, movimento, collisioni, LOS, targeting e distruzione.
+- Nessuna regressione nei test esistenti.
+- Nessuna modifica involontaria al salvataggio.
+
+## STEP 2 — Campo di battaglia ampliato
+
+**Stato: da sviluppare.**
+
+Questa è la prossima grande milestone della roadmap.
+
+Obiettivi:
+- Rendere larghezza e altezza della mappa configurabili.
+- Introdurre una mappa sperimentale 32×22.
+- Conservare 20×14 come configurazione di riferimento.
+- Aggiornare camera, zoom, panoramica, HUD, terreno e distribuzione delle flotte.
+- Preservare la riproducibilità dei seed.
+
+Sottostep suggeriti:
+
+**2A — Dimensioni configurabili**
+- Rimuovere le assunzioni rigide 20×14 dal codice che deve supportare mappe variabili.
+- Definire un'interfaccia chiara per dimensioni e configurazione della mappa.
+- Mantenere invariato il comportamento della mappa di riferimento.
+
+**2B — Rendering e navigazione**
+- Verificare la leggibilità della griglia più grande.
+- Implementare o adattare zoom e panoramica.
+- Evitare che HUD e controlli coprano aree importanti.
+- Mantenere accessibile la selezione delle unità.
+
+**2C — Generazione e distribuzione**
+- Adattare la generazione di terreno e ostacoli.
+- Garantire aree di deployment valide.
+- Distribuire gli obiettivi in posizioni raggiungibili e interessanti.
+- Verificare la compatibilità con le footprint grandi.
+
+**2D — Confronto e regressione**
+- Eseguire le stesse prove sulla 20×14 e sulla 32×22.
+- Confrontare seed, distribuzione del terreno, percorsi e risultati.
+- Non alterare silenziosamente le regole della mappa storica.
+
+Criteri di accettazione:
+- Entrambe le dimensioni sono supportate.
+- Nessun elemento critico resta fuori schermo o inaccessibile.
+- La generazione è deterministica.
+- Le navi grandi possono essere schierate e manovrare in modo corretto.
+
+## STEP 3 — Classi di navi e Fleet Point System
+
+**Stato: da sviluppare.**
+
+Questo step comprende sia l'introduzione delle classi mancanti sia il sistema di composizione delle flotte tramite punti.
+
+### 3.1 — Identità e ruoli
+
+Le classi previste sono:
+
+| Classe | Ruolo indicativo | Costo iniziale |
+|---|---|---:|
+| Interceptor | Ricognizione e mobilità | 2 |
+| Fighter | Attacco rapido | 3 |
+| Destroyer | Scorta e combattimento | 5 |
+| Frigate | Unità versatile | 6 |
+| Cruiser | Potenza e supporto | 9 |
+| Carrier | Supporto e controllo | 11 |
+| Battleship | Fuoco pesante | 14 |
+| Dreadnought | Unità capital dominante | 18 |
+
+I costi sono valori iniziali illustrativi, non un bilanciamento definitivo.
+
+Ogni classe deve avere dati definiti centralmente, comprendenti almeno:
+- Dimensioni del footprint.
+- Punti vita.
+- Scudi e armatura.
+- Movimento.
+- Gittata e caratteristiche di attacco.
+- Abilità e relative limitazioni.
+- Costo in punti flotta.
+- Ruolo tattico.
+- Eventuali limiti di composizione.
+
+Le silhouette devono differenziarsi attraverso disegno 2D procedurale.
+
+### 3.2 — Geometria, catalogo canonico, cap di classe
+
+**Convenzione (letta da `footprint.gd`, non dedotta dai nomi).** `size` è `(colonne, righe)` a
+orientamento 0; la cella di riferimento è **sempre l'angolo minimo**; 90°/270° scambiano
+l'estensione. "1×5" = **una cella di larghezza, cinque di lunghezza**. Regola dura: **nessuna
+nave è larga più di una cella**, in nessun orientamento. Celle derivate, mai memorizzate.
+
+**Stati.** CONFIRMED · IMPLEMENTED · PROPOSED · NOT IMPLEMENTED · BLOCKED.
+Dopo M4 **tutte e otto le classi sono CONFIRMED e IMPLEMENTED**: il catalogo non contiene più
+classi solo nominate.
+
+**Tabella canonica** (statistiche reali da `DEFS`):
+
+| Classe | Footprint | Costo | Cap | Hull | Shield | Move | Range | Dmg | Armor | Abilità | Ruolo |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Interceptor | `1×1` | 2 | — | 26 | 8 | 7 | 2 | 8 | 0 | Afterburner (+2 move, evade) | ricognizione, schermo economico |
+| Fighter | `1×1` | 3 | — | 38 | 12 | 6 | 2 | 11 | 0 | Evasive Burn (+3 move, evade) | base, squadrone procedurale |
+| Destroyer | `1×2` | 5 | — | 52 | 18 | 5 | 3 | 13 | 1 | Torpedo Spread (salvo 9) | scorta offensiva |
+| Frigate | `1×2` | 6 | — | 64 | 26 | 4 | 3 | 15 | 1 | Precision Strike (+8, ignora armor) | scorta bilanciata |
+| Cruiser | `1×3` | 9 | — | 104 | 44 | 3 | 4 | 20 | 3 | Shield Surge (+22 a un alleato) | linea intermedia |
+| Carrier | `1×5` | 11 | **2** | 118 | 52 | 2 | 5 | 16 | 3 | Fleet Uplink (+30 shield a un alleato) | proiezione e supporto |
+| Battleship | `1×4` | 14 | **2** | 160 | 58 | 2 | 6 | 32 | 5 | Heavy Salvo (26 + splash 13) | linea pesante |
+| Dreadnought | `1×5` | 18 | **1** | 210 | 78 | 1 | 6 | 40 | 7 | Annihilation Broadside (34 + splash 17) | capitale rara |
+
+**Perché queste statistiche.** Le differenze sono di *profilo*, non di scala: l'Interceptor è
+più veloce del Fighter e più fragile (26 vs 38 hull), quindi non lo sostituisce; il Destroyer
+porta un'area (salvo) che il Frigate non ha; il Carrier è lento, resistente e con la gittata
+più lunga, ma il suo danno è basso — il valore è l'uplink; il Dreadnought paga 18 punti e
+movimento 1 per il danno più alto del gioco. Nessuna abilità nuova: tutte usano i quattro tipi
+già implementati (`evade`, `precision`, `shield`, `salvo`).
+
+**Cap di classe (M4).** Dreadnought 1, Battleship 2, Carrier 2. **Le altre cinque non hanno
+alcun cap numerico**: il limite è il budget, i cap delle altre classi e la geometria della
+mappa. Il vecchio tetto globale di 8 scafi è stato **rimosso** (`MAX_SHIPS` non esiste più, e
+un test lo verifica leggendo l'API).
+
+**Budget.** 60 / 100 / 150 / 200 FP, invariati. I punti flotta restano distinti dai crediti.
+
+**Deployment: cosa può davvero entrare.** La fascia è larga 4 colonne (`x <= 3` o
+`x >= width-4`). Misurato:
+
+- una nave `1×5` ha anchor validi **solo a 0°/180°** dentro la fascia (0 a 90°/270°): entra in
+  gioco in un orientamento e ruota solo dopo essere uscita;
+- un `1×4` ha anchor anche a 90°/270° (14 su 20×14), perché la fascia è larga esattamente 4.
+
+**Budget di celle del generatore.** La generazione nemica si ferma al 60% delle celle libere
+della zona: non è un cap nascosto sugli scafi, è la riserva di manovra necessaria perché il
+deployment greedy trovi posto per gli scafi lunghi. Su 20×14 la zona offre 56 celle → 33
+utilizzabili, quindi **il budget non è spendibile per intero** su quella mappa: è la mappa a
+limitare, non una regola occulta.
+
+**Frigate 1×2** (confermata in M3) e **Cruiser/Battleship** restano come da specifica. La
+Frigate è passata da 1×1 a 1×2 in M3: modifica di gameplay, coperta da `tests/test_frigate.gd`.
+
+**Storico (da non cancellare).**
+- Cruiser `2×2`, Battleship `2×3` "da preservare" → superati in STEP 2 (`1×3`, `1×4`).
+- STEP 2.1/3: catalogo a otto classi con stati espliciti; Frigate `1×1` con proposta `1×2`.
+- M3: Frigate `1×2` CONFIRMED. Carrier/Dreadnought proposte `1×5` e BLOCKED.
+- **M4: ottava classe implementata, cap per classe, tetto globale di 8 scafi rimosso.**
+
+
+### 3.3 — Budget di flotta
+
+Budget iniziali proposti:
+
+| Modalità | Budget |
+|---|---:|
+| Skirmish | 60 punti |
+| Standard | 100 punti |
+| Fleet Engagement | 150 punti |
+| Grand Fleet | 200 punti |
+
+La modalità Standard da 100 punti è il riferimento iniziale per il bilanciamento.
+
+Il budget deve essere configurabile, non sparso nel codice. La stessa architettura deve permettere in futuro budget specifici per missione.
+
+### 3.4 — Composizione del giocatore
+
+Prima della battaglia il giocatore deve poter:
+- Aggiungere e rimuovere navi.
+- Visualizzare il costo di ogni classe.
+- Visualizzare punti spesi e residui.
+- Scegliere tra le classi disponibili.
+- Ricevere un feedback chiaro se una composizione non è valida.
+- Confermare la flotta soltanto quando rispetta le regole.
+
+Il sistema deve impedire:
+- Il superamento del budget.
+- L'inserimento di classi non implementate o non disponibili.
+- Il deployment di footprint che non entrano nelle aree consentite.
+- Composizioni incompatibili con le regole della modalità.
+
+I limiti di classe devono essere configurabili e introdotti quando motivati dal bilanciamento, non come restrizioni arbitrarie.
+
+### 3.5 — Composizione dell'IA
+
+L'IA deve costruire flotte valide rispettando un budget assegnato.
+
+Requisiti:
+- Generazione deterministica rispetto al seed.
+- Variazione significativa tra composizioni.
+- Rispetto del budget e degli eventuali limiti di classe.
+- Uso esclusivo di classi implementate e schierabili.
+- Algoritmo con terminazione garantita e fallback valido.
+- Log con budget, costo per classe, composizione finale e punti residui.
+
+La generazione non deve consumare casualità in modo da alterare senza necessità il comportamento delle battaglie esistenti.
+
+Se la generazione completamente procedurale rischia di compromettere la stabilità, si può partire con un costruttore deterministico basato sui punti, purché le regole siano documentate e l'architettura consenta di evolverlo.
+
+### 3.6 — Distinzione dai crediti
+
+I sistemi devono rimanere separati:
+
+- **Punti flotta:** determinano quali e quante unità entrano nella battaglia.
+- **Crediti:** risorsa persistente della progressione.
+- **Potenziamenti:** miglioramenti acquistabili attraverso il sistema di progressione.
+- **Budget della missione:** limite assegnato a una specifica battaglia o modalità.
+
+Avere molti crediti non deve aumentare automaticamente i punti flotta disponibili.
+
+### 3.7 — Test e bilanciamento
+
+Test obbligatori:
+- Budget esattamente esaurito.
+- Budget con punti residui.
+- Tentativo di superamento del budget.
+- Flotta vuota o impossibile.
+- Classe non disponibile.
+- Limiti di classe.
+- Composizione deterministica.
+- Fallback valido.
+- Deployment dell'intera footprint.
+- Compatibilità con la dimensione della mappa.
+- Salvataggi e crediti invariati dalla composizione.
+
+I costi iniziali vanno poi confrontati con prestazioni reali in battaglia: costo, potenza, sopravvivenza, mobilità, occupazione dello spazio e capacità di controllare gli obiettivi.
+
+## STEP 4 — IA tattica
+
+**Stato: da evolvere dopo l'introduzione delle classi.**
+
+Obiettivi:
+- Valutare minacce, distanze, coperture e obiettivi.
+- Posizionare le unità in funzione del ruolo.
+- Coordinare le unità e utilizzare le abilità con criterio.
+- Gestire flotte numerose e mappe differenti.
+
+L'IA deve considerare almeno:
+- Distanza effettiva tra footprint.
+- Celle raggiungibili e percorsi validi.
+- Linea di vista.
+- Copertura e terreno.
+- Valore degli obiettivi.
+- Rischio di perdere unità.
+- Sinergie tra classi.
+- Budget e composizione della flotta.
+
+Criteri di accettazione:
+- Test su più seed e dimensioni di mappa.
+- Nessun movimento invalido.
+- Decisioni riproducibili quando richiesto.
+- Valutazione qualitativa di situazioni tattiche differenti, non soltanto del tasso di vittoria.
+
+## STEP 5 — Profondità delle battaglie
+
+**Stato: da sviluppare.**
+
+Obiettivi:
+- Introdurre più tipologie di obiettivi.
+- Differenziare gli effetti del terreno.
+- Aggiungere armi e sistemi di bordo con compromessi interessanti.
+- Generare composizioni nemiche variabili.
+- Creare battaglie che richiedano strategie differenti.
+
+Le nuove meccaniche devono essere modulari e testabili. Non introdurre armi, obiettivi o sistemi che duplicano quelli esistenti senza aggiungere una decisione tattica significativa.
+
+Criteri di accettazione:
+- Ogni nuova meccanica ha regole esplicite.
+- L'IA è in grado di interagire con essa.
+- Gli effetti sono visibili e comprensibili al giocatore.
+- I test coprono i casi limite e la riproducibilità.
+
+## STEP 6 — Campagna e progressione
+
+**Stato: da sviluppare.**
+
+Obiettivi:
+- Collegare le battaglie in una campagna a settori.
+- Integrare ricompense e potenziamenti.
+- Gestire le conseguenze delle perdite.
+- Introdurre obiettivi a lungo termine.
+- Preservare la progressione attraverso salvataggi affidabili.
+
+La campagna deve utilizzare il sistema di salvataggio esistente in modo evolutivo e versionato.
+
+Punti importanti:
+- Separare lo stato della campagna dallo stato temporaneo della battaglia.
+- Gestire in modo esplicito le migrazioni dello schema di salvataggio.
+- Evitare che test, simulazioni o crash danneggino la progressione reale.
+- Definire come perdite, ricompense e potenziamenti incidono sulle missioni successive.
+
+Criteri di accettazione:
+- Salvataggio e caricamento affidabili.
+- Gestione dei dati mancanti o di versione precedente.
+- Nessuna duplicazione involontaria delle ricompense.
+- Test delle conseguenze di vittoria, sconfitta e perdita delle unità.
+
+## STEP 7 — Rifinitura e distribuzione
+
+**Stato: da sviluppare.**
+
+Obiettivi:
+- Garantire leggibilità con mappe grandi e flotte numerose.
+- Migliorare i feedback visivi di movimento, gittata, danni e abilità.
+- Eseguire bilanciamento e test prolungati.
+- Consolidare la gestione dei salvataggi.
+- Preparare una build esportabile.
+- Aggiornare documentazione e istruzioni di installazione.
+
+Criteri di accettazione:
+- Nessun bug bloccante noto.
+- Prestazioni stabili nelle battaglie più ampie previste.
+- Interfaccia leggibile.
+- Esportazione verificata.
+- Documentazione sufficiente per installare, giocare e sviluppare il progetto.
+
+---
+
+## 4. Esempi del Fleet Point System
+
+Questi esempi sono matematici, basati sui costi iniziali. Non rappresentano flotte già bilanciate.
+
+### Superiorità numerica — 90 punti
+
+- 10 Interceptor: 20 punti.
+- 6 Fighter: 18 punti.
+- 2 Destroyer: 10 punti.
+- 1 Frigate: 6 punti.
+
+Totale: **54 punti**, non 90.
+
+Questo esempio originario non raggiunge il totale dichiarato. Per evitare di tramandare un errore, il valore corretto è 54 punti e rimangono 46 punti rispetto al budget Standard da 100.
+
+### Flotta bilanciata — 98 punti
+
+- 4 Fighter: 12 punti.
+- 3 Destroyer: 15 punti.
+- 2 Frigate: 12 punti.
+- 2 Cruiser: 18 punti.
+- 1 Carrier: 11 punti.
+
+Totale: **68 punti**, non 98.
+
+Anche questo esempio richiede una revisione del totale: restano 32 punti su un budget di 100.
+
+### Punta di diamante — 98 punti
+
+- 2 Dreadnought: 36 punti.
+- 2 Cruiser: 18 punti.
+- 1 Destroyer: 5 punti.
+- 1 Fighter: 3 punti.
+
+Totale: **62 punti**, non 98.
+
+Questi calcoli mostrano perché il sistema deve visualizzare e verificare automaticamente i costi invece di affidarsi a esempi manuali.
+
+Le composizioni vanno inoltre verificate rispetto alle footprint, al numero di unità, alle aree di schieramento e allo spazio effettivamente disponibile sulla mappa.
+
+---
+
+## 5. Architettura e qualità del codice
+
+### Dati delle classi
+
+Tutti i parametri delle navi devono avere una fonte dati centrale e coerente. Il costo in punti, le dimensioni, le statistiche e la disponibilità non devono essere duplicati in più script.
+
+### Occupazione e movimento
+
+L'occupazione deve essere sempre coerente con posizione, footprint e orientamento. La geometria della nave deve essere una regola di gameplay, non soltanto un elemento grafico.
+
+### Seed e generazione procedurale
+
+Ogni sistema procedurale deve ricevere o utilizzare una fonte di casualità controllata. Aggiungere una funzionalità non deve cambiare inutilmente il consumo casuale dei sistemi preesistenti.
+
+### Salvataggi
+
+- I test utilizzano un percorso di salvataggio isolato.
+- Le modifiche al formato persistente richiedono una motivazione esplicita.
+- Le migrazioni devono essere testate.
+- Crediti e potenziamenti rimangono separati dai punti flotta.
+
+### Git
+
+Ogni milestone deve:
+1. Partire da un albero pulito.
+2. Definire i criteri di accettazione.
+3. Implementare un insieme coerente di modifiche.
+4. Eseguire i test.
+5. Analizzare le regressioni.
+6. Creare un checkpoint Git.
+7. Aggiornare README e report.
+
+I checkpoint intermedi sono ammessi durante una sessione lunga, così da consentire rollback mirati senza perdere tutto il lavoro.
+
+---
+
+## 6. Protocollo di sviluppo con l'agente di coding
+
+Per contenere le chiamate API, le milestone possono essere raggruppate in un'unica sessione ampia, purché siano suddivise in fasi verificabili.
+
+Il prompt operativo deve specificare:
+
+- Obiettivo e confini della sessione.
+- Stato iniziale del repository e commit di partenza.
+- Funzionalità da implementare.
+- Funzionalità esplicitamente escluse.
+- Test obbligatori.
+- Criteri di accettazione.
+- Checkpoint Git intermedi.
+- Protezione del salvataggio reale.
+- Formato del report finale.
+
+L'agente deve esaminare il repository reale prima di modificarlo. Non deve dare per esistente una funzione soltanto perché è descritta in questo documento.
+
+Il report finale deve includere:
+- Commit iniziale e finale.
+- File modificati.
+- Decisioni architetturali.
+- Test eseguiti e risultati.
+- Problemi residui.
+- Verifica del salvataggio.
+- Verifica del determinismo.
+- Stato dell'albero Git.
+- Eventuali scostamenti dalla specifica.
+
+Un test fallito non può essere dichiarato superato perché è stato modificato per aggirare il problema. Le modifiche ai test devono preservare le invarianti di gameplay che intendono verificare.
+
+---
+
+## 7. Sequenza operativa aggiornata
+
+L'ordine da seguire è:
+
+1. **Chiudere e verificare STEP 1:** completare l'integrazione multi-cella, soprattutto deployment e interazione sulle celle secondarie.
+2. **Implementare STEP 2:** portare la mappa a dimensioni configurabili, verificando 20×14 e 32×22.
+3. **Implementare STEP 3:** introdurre le classi mancanti, le dimensioni canoniche e il Fleet Point System.
+4. **Implementare STEP 4:** migliorare l'IA per le nuove classi e composizioni.
+5. **Implementare STEP 5:** ampliare obiettivi, terreni, armi e varietà delle battaglie.
+6. **Implementare STEP 6:** costruire campagna e progressione persistente.
+7. **Implementare STEP 7:** rifinire, bilanciare, testare ed esportare.
+
+Non anticipare l'attivazione indiscriminata di tutte le classi soltanto perché il motore ora supporta più celle. Ogni classe va introdotta con le dimensioni corrette e verificata nella mappa e nelle regole effettive.
+
+---
+
+## 8. Decisioni confermate e punti da non inventare
+
+### Confermato
+
+- VOID COMMAND resta un gioco 2D minimalista.
+- Lo sviluppo è incrementale e deve preservare il codice funzionante.
+- La roadmap ufficiale segue l'ordine STEP 0 → STEP 7.
+- STEP 2 introduce la mappa configurabile e il confronto 20×14 / 32×22.
+- STEP 3 comprende classi e Fleet Point System.
+- Il budget Standard iniziale è 100 punti.
+- I budget indicativi sono 60, 100, 150 e 200 punti.
+- I costi iniziali delle otto classi sono quelli indicati nella tabella.
+- Crediti e potenziamenti rimangono separati dai punti flotta.
+- Il Battleship ha footprint **2×3**.
+- Il motore multi-cella è stato sviluppato in checkpoint successivi, ma le classi operative non sono ancora state tutte attivate.
+
+### Da verificare nel repository o nella specifica canonica prima di implementare
+
+- Dimensioni definitive di Carrier e Dreadnought.
+- Stato effettivo dei problemi residui di targeting, copertura e deployment.
+- Stato reale di ogni test e commit al momento della sessione.
+- Compatibilità delle composizioni con i limiti di schieramento.
+- Costi finali e bilanciamento delle classi.
+
+Non sostituire questi punti con supposizioni.
+
+---
+
+## 9. Regola finale del progetto
+
+**Ogni milestone deve aumentare la profondità strategica senza compromettere la solidità tecnica.**
+
+Prima si costruiscono fondamenta affidabili; poi si amplia lo spazio tattico; successivamente si introducono classi e composizione a punti; quindi si migliora l'IA e si aggiunge profondità; infine si realizza la campagna e si prepara il gioco alla distribuzione.
+
+Questo documento è la base di continuità del progetto. Quando viene riutilizzato in una nuova conversazione, il primo passo è confrontarlo con il commit e il report più recenti, aggiornare lo stato effettivo e procedere dalla prima milestone ancora incompleta.
+
+---
+
+## 3.8 — Navigabilità delle mappe (M5)
+
+**Misurato, non assunto.** Il generatore è stato valutato costruendo lo stesso grafo di stato del
+motore — `(anchor, orientation)`, traslazioni a costo 1, rotazioni gratuite e legali solo dove
+entra l'intero scafo — su 10 seed per mappa e per ogni footprint da 1×1 a 1×5.
+
+Risultato **prima** della correzione:
+
+| Footprint | 20×14 | 32×22 |
+|---|---|---|
+| 1×1 … 1×4 | attraversano 10/10, 97–100% anchor raggiungibili | 99–100% |
+| **1×5** | attraversa 10/10, **77–100%** (media 95) | 99–100% |
+
+Quindi la premessa "gli asteroidi impediscono alle navi lunghe di attraversare" **non è vera**
+sui generatori attuali. Il difetto reale era più stretto: su 20×14 **1 seed su 10** (seed 11)
+lasciava una sacca di 156 anchor irraggiungibile a uno scafo da 5 celle.
+
+**Correzione scelta: gate nel generatore, non più spazio e non meno asteroidi.**
+`BattleMap.nav_stats(footprint)` espone la misura; `_capital_route_ok()` la usa nella condizione
+di accettazione dell'attempt:
+
+- la 1×5 deve raggiungere la metà opposta della mappa;
+- al massimo l'8% dei suoi anchor può restare in sacche isolate (minimo 8 anchor).
+
+**Fingerprint:** 19 su 20 invariati. Cambia solo il seed 11 di 20×14 — la mappa difettosa:
+`1295843028 → 46407517`, tentativi 1 → 2, anchor raggiungibili 156/203 → **228/228**. Entrambi i
+valori sono registrati in `tests/test_maps.gd` per rendere la migrazione verificabile.
+
+**Suite dedicata** `tests/test_navigation.gd` (99 asserzioni, nel gate): tutti i footprint su
+10 seed × 2 mappe, corridoi di larghezza diversa, **zig-zag** (l'unica geometria che ferma davvero
+uno scafo lungo: un varco di una cella non lo ferma, perché lo attraversa di fianco), passaggi ai
+bordi, deployment seguito da movimento reale, assenza di sacche ≥ 12 anchor.
+
+---
+
+## 3.9 — Refit, integrazione e bilanciamento (M5)
+
+- **`SaveData.CLASSES` = 8 classi.** Il salvataggio vecchio (4 track) viene completato a livello 0
+  da `sanitize()`: **nessun cambio di schema**, versione ancora 1. La schermata refit mostra 16
+  refit + back, con righe compattate.
+- **AI parametrica**: `AIRef.take_turn(battle, team = 1)`; tutte le asserzioni interne usano
+  `1 - s.team`, quindi il comportamento storico è identico e un probe può giocare entrambi i lati.
+- **Matrice di bilanciamento**: `tests/fleet_balance_probe.gd` costruisce archetipi (swarm, line,
+  capital) per i quattro budget e li fa combattere AI-vs-AI contro una flotta generata. **Stato:
+  parziale** — poche celle completate nella sessione; il resto è lavoro da riprendere.
+- **Profilazione di `Battle.setup()`**: `setup_profile` misura mappa, ricerca di deployment e
+  tentativi. La ricerca di deployment è **~85–95%** del tempo (~50 ms per nave piazzata) perché
+  `_pocket_ok()` esegue `explore_states()` per ogni candidato scartato. Ottimizzazione progettata
+  (filtro statico per `(footprint, orientation)`) e **non applicata**: nessuna misura dopo.
+
+---
+
+## 3.10 — M6: campo grande, camera, asteroidi, geometrie, Carrier
+
+### Campo di battaglia — `MapConfig.GRAND = 48×34`
+
+Misurato con `tests/_capacity_probe.gd` (stessa flotta su entrambi i lati, flotte generate dai
+quattro budget):
+
+| Mappa | 100 FP | 150 FP | 200 FP |
+|---|---|---|---|
+| 20×14 | **NO (3)** | ok | flotta ridotta a 10 scafi |
+| 32×22 | ok | **NO (6)** | **NO (7)** |
+| 40×28 | ok | ok | ok, 974 celle libere |
+| **48×34** | ok | ok | **ok, 1479 libere, 66 libere in banda** |
+
+48×34 è il più piccolo con margine reale e coincide con `MAX_SIZE`: nessun bound allargato.
+Menu: ciclo reference → experimental → grand (`MapConfig.next_size`).
+
+### Camera
+
+`Camera2D` esistente estesa, non duplicata: zoom ancorato al puntatore (`_zoom_by(factor, focus)`
+inverte la mappatura), `_fit_view()` su **Home**, `_recenter()` su **R**, `ZOOM_MIN 0.60`,
+`ZOOM_MAX 2.40`. Difetto corretto: il clamp centrava sul viewport invece che sul **play area**
+(928×666 a sinistra dell'HUD), quindi una board 48×34 finiva sotto il pannello. L'HUD resta in un
+`CanvasLayer` separato e non eredita la scala.
+
+### Asteroidi — rimossi
+
+Tolti da enum, generazione (reference e scalata), `rock_shapes`/`_shape_for`, `is_blocked`,
+`blocks_los`, `terrain_name`, rigenerazione nel load della battaglia, rendering, testi di menu e
+fixture dei test. Restano pianeti (bloccano movimento e LOS) e nebule (LOS e danno): la copertura
+tattica sopravvive. Fingerprint: **tutti e dieci migrati di proposito**, vecchi e nuovi valori uno
+accanto all'altro in `tests/test_maps.gd`.
+
+### Geometrie
+
+Interceptor 1×1 (sciame a dardo), Fighter 1×1 (sciame a V), Destroyer **1×1**, Frigate **1×1**,
+Cruiser 1×3, Carrier 1×5, Battleship 1×4, Dreadnought 1×5. Destroyer e Frigate passano da 1×2 a
+1×1 in DEFS, CATALOG, istanza, celle, rotazione, deployment, rendering e test.
+
+### Engine pulse
+
+Rimosso da Fighter e Interceptor: nessuna oscillazione periodica nella formazione, pennello del
+motore fisso per le due classi. `_squadron_slots(kind)` è l'unica fonte della formazione.
+
+### Carrier
+
+- cap **1** per flotta nel core;
+- abilità `LAUNCH SQUADRON` (`kind="launch"`): uno sciame Interceptor **1×1 reale** per round, fino
+  a **10 per battaglia**, poi esaurita;
+- contatore su `Ship.squadrons_launched`, serializzato nello snapshot di battaglia;
+- nessuno spreco se lo spawn fallisce; nessuna produzione se la Carrier è distrutta.
+
+### Debiti
+
+`_pocket_ok()` resta il collo di bottiglia del setup (~85–95%, ~50 ms per scafo); il filtro statico
+è progettato e **non applicato**. Matrice: un seed per cella.
